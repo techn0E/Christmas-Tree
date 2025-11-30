@@ -48,6 +48,15 @@ function App() {
     drawTree();
   }, [images]);
 
+  const captureFrame = async (canvas: HTMLCanvasElement) => {
+    return new Promise<Blob>((resolve) => {
+      // Use toBlob to get current canvas content
+      canvas.toBlob((blob) => {
+        resolve(blob!);
+      }, "image/png");
+    });
+  };
+
   const generateVideo = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return alert("Canvas not found");
@@ -55,30 +64,33 @@ function App() {
 
     const audioUrl = URL.createObjectURL(audio);
 
-    // Load FFmpeg if not loaded
     setLoadingFFmpeg(true);
     if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-    // Capture frames from canvas
     const fps = 30;
-    const durationSec = 5; // you can adjust this to match audio or dynamic duration
+    const durationSec = 5; // adjust to audio duration
     const frameCount = Math.ceil(durationSec * fps);
 
+    // Wait until all images are loaded
+    await Promise.all(images.map((img) => new Promise<void>((res) => {
+      const temp = new Image();
+      temp.src = URL.createObjectURL(img);
+      temp.onload = () => res();
+    })));
+
+    // Write frames
     for (let i = 0; i < frameCount; i++) {
-      // Optional: animate or redraw for each frame here
-      drawTree();
-
-      const frameBlob: Blob = await new Promise((resolve) =>
-        canvas.toBlob((b) => resolve(b!), "image/png")
+      drawTree(); // redraw tree
+      const frameBlob = await captureFrame(canvas);
+      ffmpeg.FS(
+        "writeFile",
+        `frame_${i.toString().padStart(4, "0")}.png`,
+        await fetchFile(frameBlob)
       );
-
-      ffmpeg.FS("writeFile", `frame_${i.toString().padStart(4, "0")}.png`, await fetchFile(frameBlob));
     }
 
-    // Write audio file to FFmpeg FS
     ffmpeg.FS("writeFile", "audio.mp3", await fetchFile(audio));
 
-    // Run FFmpeg to generate MP4
     await ffmpeg.run(
       "-framerate", fps.toString(),
       "-i", "frame_%04d.png",
@@ -102,6 +114,7 @@ function App() {
     URL.revokeObjectURL(audioUrl);
     setLoadingFFmpeg(false);
   };
+
 
   return (
     <div style={{ textAlign: "center", padding: "20px" }}>
