@@ -84,23 +84,30 @@ function App() {
     audioStream?.getAudioTracks().forEach((t) => canvasStream.addTrack(t));
 
     // Record WebM first
+    // Record WebM robustly
     const chunks: Blob[] = [];
-    const recorder = new MediaRecorder(canvasStream, { mimeType: "video/webm; codecs=vp9,opus" });
-    const stopped = new Promise<void>((resolve) => { recorder.onstop = () => resolve(); });
-    recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
-    recorder.start(1000);
+    const recorder = new MediaRecorder(canvasStream, { mimeType: "video/webm; codecs=vp8,opus" });
+
+    const stopped = new Promise<Blob[]>((resolve, reject) => {
+      recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size) chunks.push(ev.data);
+      };
+      recorder.onstop = () => resolve(chunks);
+      recorder.onerror = (e) => reject(e);
+    });
+
+    audioEl.onended = () => recorder.stop();
+
+    recorder.start();
 
     audioEl.volume = 1.0;
-    audioEl.play().catch(() => { alert("Audio playback blocked. Click Play."); });
+    audioEl.play().catch(() => {
+      alert("Audio playback blocked by browser. Click Play on the page.");
+    });
 
-    setTimeout(() => {
-      if (recorder.state === "recording") recorder.stop();
-      audioEl.pause();
-    }, durationSec * 1000 + 500);
+    const recordedChunks = await stopped;
+    const webmBlob = new Blob(recordedChunks, { type: "video/webm" });
 
-    await stopped;
-
-    const webmBlob = new Blob(chunks, { type: "video/webm" });
 
     // Convert WebM → MP4 using FFmpeg
     setLoadingFFmpeg(true);
