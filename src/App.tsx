@@ -63,14 +63,6 @@ function App() {
     drawTree();
   }, [images]);
 
-  const captureFrame = async (canvas: HTMLCanvasElement) => {
-    return new Promise<Blob>((resolve) => {
-      // Use toBlob to get current canvas content
-      canvas.toBlob((blob) => {
-        resolve(blob!);
-      }, "image/png");
-    });
-  };
 
   const generateVideo = async () => {
     const canvas = canvasRef.current;
@@ -82,41 +74,36 @@ function App() {
     setLoadingFFmpeg(true);
     if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
-    const fps = 30;
-    const durationSec = 5; // adjust to audio duration
-    const frameCount = Math.ceil(durationSec * fps);
-
-    // Wait until all images are loaded
-    await Promise.all(images.map((img) => new Promise<void>((res) => {
-      const temp = new Image();
-      temp.src = URL.createObjectURL(img);
-      temp.onload = () => res();
-    })));
-
-    // Write frames
-    for (let i = 0; i < frameCount; i++) {
-      await drawTree(); // wait until everything is drawn
-      const frameBlob = await captureFrame(canvas);
-      ffmpeg.FS(
-        "writeFile",
-        `frame_${i.toString().padStart(4, "0")}.png`,
-        await fetchFile(frameBlob)
-      );
-    }
-
+    // 1. Get the canvas as an image
+    const imageBlob: Blob = await new Promise((resolve) =>
+      canvas.toBlob((b) => resolve(b!), "image/png")
+    );
+    ffmpeg.FS("writeFile", "image.png", await fetchFile(imageBlob));
     ffmpeg.FS("writeFile", "audio.mp3", await fetchFile(audio));
 
+    // 2. Get audio duration
+    const audioEl = new Audio(audioUrl);
+    await new Promise<void>((resolve, reject) => {
+      audioEl.onloadedmetadata = () => resolve();
+      audioEl.onerror = () => reject();
+      audioEl.load();
+    });
+    const durationSec = audioEl.duration;
+
+    // 3. Run FFmpeg: repeat the image for the audio duration
     await ffmpeg.run(
-      "-framerate", fps.toString(),
-      "-i", "frame_%04d.png",
-      "-i", "audio.mp3",
+      "-loop", "1",           // loop the image
+      "-i", "image.png",      // input image
+      "-i", "audio.mp3",      // input audio
       "-c:v", "libx264",
+      "-t", durationSec.toString(), // set video duration
       "-pix_fmt", "yuv420p",
       "-c:a", "aac",
-      "-shortest",
+      "-shortest",            // stop at the end of audio
       "output.mp4"
     );
 
+    // 4. Save MP4
     const data = ffmpeg.FS("readFile", "output.mp4");
     const mp4Blob = new Blob([data.buffer], { type: "video/mp4" });
     const url = URL.createObjectURL(mp4Blob);
@@ -129,6 +116,7 @@ function App() {
     URL.revokeObjectURL(audioUrl);
     setLoadingFFmpeg(false);
   };
+
 
 
   return (
