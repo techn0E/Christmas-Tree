@@ -11,7 +11,7 @@ function App() {
   const [loadingFFmpeg, setLoadingFFmpeg] = useState(false);
 
   // Draw Christmas tree with uploaded images
-  const drawTree = () => {
+  const drawTree = async () => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -20,29 +20,44 @@ function App() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const bgImg = new Image();
-    bgImg.src = "/images/ctree.jpg"; // make sure this exists in public/images
-    bgImg.onload = () => {
-      ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+    bgImg.src = "/images/ctree.jpg";
+    await new Promise<void>((res) => { bgImg.onload = () => res(); });
 
-      const totalImages = images.length;
-      let index = 0;
-      for (let row = 0; index < totalImages; row++) {
-        const numInRow = row + 1;
-        const y = 50 + row * 100;
-        const rowWidth = numInRow * 100;
-        const startX = (canvas.width - rowWidth) / 2;
+    ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
 
-        for (let col = 0; col < numInRow && index < totalImages; col++) {
-          const x = startX + col * 100;
-          const imgFile = images[index];
-          const img = new Image();
-          img.src = URL.createObjectURL(imgFile);
-          img.onload = () => ctx.drawImage(img, x, y, 80, 80);
-          index++;
-        }
+    const totalImages = images.length;
+    let index = 0;
+
+    for (let row = 0; index < totalImages; row++) {
+      const numInRow = row + 1;
+      const y = 50 + row * 100;
+      const rowWidth = numInRow * 100;
+      const startX = (canvas.width - rowWidth) / 2;
+
+      const rowPromises = [];
+
+      for (let col = 0; col < numInRow && index < totalImages; col++) {
+        const x = startX + col * 100;
+        const imgFile = images[index];
+        const img = new Image();
+        img.src = URL.createObjectURL(imgFile);
+
+        const p = new Promise<void>((resolve) => {
+          img.onload = () => {
+            ctx.drawImage(img, x, y, 80, 80);
+            resolve();
+          };
+        });
+
+        rowPromises.push(p);
+        index++;
       }
-    };
+
+      // Wait for this row to finish drawing
+      await Promise.all(rowPromises);
+    }
   };
+
 
   useEffect(() => {
     drawTree();
@@ -80,7 +95,7 @@ function App() {
 
     // Write frames
     for (let i = 0; i < frameCount; i++) {
-      drawTree(); // redraw tree
+      await drawTree(); // wait until everything is drawn
       const frameBlob = await captureFrame(canvas);
       ffmpeg.FS(
         "writeFile",
