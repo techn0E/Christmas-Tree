@@ -52,7 +52,6 @@ function App() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const fps = 1; // 1 frame per second for simplicity
     const frames: Blob[] = [];
 
     // Capture canvas frames (simple static frame for now)
