@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import React, { useEffect, useState, useRef } from "react";
 
 interface ImageCanvasProps {
@@ -15,15 +16,15 @@ const IMAGE_SIZE = 150;
 const DEFAULT_WIDTH = 1080;
 const DEFAULT_HEIGHT = 1350;
 
-export default function ImageCanvas({ 
-  canvasRef, 
-  images, 
-  positions, 
+export default function ImageCanvas({
+  canvasRef,
+  images,
+  positions,
   setPositions,
   backgroundSrc,
   treeSrc,
   width = DEFAULT_WIDTH,
-  height = DEFAULT_HEIGHT
+  height = DEFAULT_HEIGHT,
 }: ImageCanvasProps) {
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
   const [bgLoaded, setBgLoaded] = useState(false);
@@ -86,7 +87,14 @@ export default function ImageCanvas({
   }, [positions]);
 
   // Helper function to draw image with cover (no stretching)
-  const drawImageCover = (img: HTMLImageElement, x: number, y: number, w: number, h: number, ctx: CanvasRenderingContext2D) => {
+  const drawImageCover = (
+    img: HTMLImageElement,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    ctx: CanvasRenderingContext2D
+  ) => {
     const imgAspect = img.width / img.height;
     const containerAspect = w / h;
     let sourceWidth = img.width;
@@ -117,7 +125,7 @@ export default function ImageCanvas({
     if (!canvas || !ctx || !bgLoaded || !treeLoaded) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
+
     // Draw background with cover
     if (bgImage.current) {
       drawImageCover(bgImage.current, 0, 0, canvas.width, canvas.height, ctx);
@@ -128,7 +136,14 @@ export default function ImageCanvas({
       const padding = getTreePadding();
       const treeWidth = canvas.width - padding.left - padding.right;
       const treeHeight = canvas.height - padding.top - padding.bottom;
-      drawImageCover(treeImage.current, padding.left, padding.top, treeWidth, treeHeight, ctx);
+      drawImageCover(
+        treeImage.current,
+        padding.left,
+        padding.top,
+        treeWidth,
+        treeHeight,
+        ctx
+      );
     }
 
     // Draw user images (ornaments/toys) on top
@@ -140,7 +155,7 @@ export default function ImageCanvas({
         }
         ctx.drawImage(img, pos.x, pos.y, IMAGE_SIZE, IMAGE_SIZE);
         ctx.globalAlpha = 1.0;
-        
+
         if (i === hoveredIndex || i === dragIndex) {
           ctx.shadowColor = i === dragIndex ? "#FFD700" : "#FFA500";
           ctx.shadowBlur = 8;
@@ -148,12 +163,27 @@ export default function ImageCanvas({
           ctx.shadowOffsetY = 0;
           ctx.strokeStyle = i === dragIndex ? "#FFD700" : "#FFA500";
           ctx.lineWidth = 5;
-          ctx.strokeRect(pos.x - 2, pos.y - 2, IMAGE_SIZE + 4, IMAGE_SIZE + 4);
+          ctx.strokeRect(
+            pos.x - 2,
+            pos.y - 2,
+            IMAGE_SIZE + 4,
+            IMAGE_SIZE + 4
+          );
           ctx.shadowColor = "transparent";
         }
       }
     });
-  }, [loadedImages, positions, bgLoaded, treeLoaded, canvasRef, width, height, hoveredIndex, dragIndex]);
+  }, [
+    loadedImages,
+    positions,
+    bgLoaded,
+    treeLoaded,
+    canvasRef,
+    width,
+    height,
+    hoveredIndex,
+    dragIndex,
+  ]);
 
   // Drag logic
   useEffect(() => {
@@ -162,20 +192,42 @@ export default function ImageCanvas({
 
     const getMousePos = (e: MouseEvent | TouchEvent) => {
       const rect = canvas.getBoundingClientRect();
+      let clientX, clientY;
+
       if ("touches" in e && e.touches.length > 0) {
-        return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+        clientX = e.touches[0].clientX;
+        clientY = e.touches[0].clientY;
       } else if ("clientX" in e) {
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        clientX = e.clientX;
+        clientY = e.clientY;
+      } else {
+        return { x: 0, y: 0 };
       }
-      return { x: 0, y: 0 };
+
+      // Convert mouse position from screen coordinates to canvas drawing coordinates
+      // This is crucial if the canvas is scaled on the page.
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY,
+      };
     };
 
     const getHoveredImage = (pos: { x: number; y: number }) => {
+      // Iterate backward to check top-most (last drawn) images first
       for (let i = loadedImages.length - 1; i >= 0; i--) {
         const imgPos = currentPositions.current[i];
         if (!imgPos) continue;
-        if (pos.x >= imgPos.x - 20 && pos.x <= imgPos.x + IMAGE_SIZE + 20 && 
-            pos.y >= imgPos.y - 20 && pos.y <= imgPos.y + IMAGE_SIZE + 20) {
+
+        // Hit detection area is exactly the image drawn area
+        if (
+          pos.x >= imgPos.x &&
+          pos.x <= imgPos.x + IMAGE_SIZE &&
+          pos.y >= imgPos.y &&
+          pos.y <= imgPos.y + IMAGE_SIZE
+        ) {
           return i;
         }
       }
@@ -188,25 +240,45 @@ export default function ImageCanvas({
       if (index !== null) {
         dragIndexRef.current = index;
         setDragIndex(index);
+
         const imgPos = currentPositions.current[index];
+        // Correctly calculate offset: distance from mouse click (pos) to image's top-left corner (imgPos)
         offset.current = { x: pos.x - imgPos.x, y: pos.y - imgPos.y };
+
+        // Prevent default on touch to stop scrolling/panning
+        if ('touches' in e) e.preventDefault();
       }
     };
 
     const handleMove = (e: MouseEvent | TouchEvent) => {
       const pos = getMousePos(e);
-      
+
+      // Check ref for current dragging status
       if (dragIndexRef.current === null) {
         const hoveredIdx = getHoveredImage(pos);
         setHoveredIndex(hoveredIdx);
         canvas.style.cursor = hoveredIdx !== null ? "grab" : "default";
-      } else {
-        canvas.style.cursor = "grabbing";
-        const newPos = [...currentPositions.current];
-        newPos[dragIndexRef.current] = { x: pos.x - offset.current.x, y: pos.y - offset.current.y };
-        currentPositions.current = newPos;
-        setPositions(newPos);
+        return;
       }
+
+      // We are dragging
+      canvas.style.cursor = "grabbing";
+
+      // Only prevent default on touch when dragging to keep the drag smooth
+      if ('touches' in e) e.preventDefault();
+
+      const newPos = [...currentPositions.current];
+      const dragIdx = dragIndexRef.current;
+
+      // Calculate new image position: Mouse Position - Offset
+      newPos[dragIdx] = {
+        x: pos.x - offset.current.x,
+        y: pos.y - offset.current.y,
+      };
+
+      // Update ref and state
+      currentPositions.current = newPos;
+      setPositions(newPos);
     };
 
     const handleUp = () => {
@@ -227,8 +299,8 @@ export default function ImageCanvas({
     canvas.addEventListener("mousemove", handleMove);
     canvas.addEventListener("mouseup", handleUp);
     canvas.addEventListener("mouseleave", handleLeave);
-    canvas.addEventListener("touchstart", handleDown);
-    canvas.addEventListener("touchmove", handleMove);
+    canvas.addEventListener("touchstart", handleDown, { passive: false }); // Needs to be non-passive for preventDefault to work
+    canvas.addEventListener("touchmove", handleMove, { passive: false });
     canvas.addEventListener("touchend", handleUp);
 
     // Document-level listeners for drag outside canvas
@@ -258,7 +330,14 @@ export default function ImageCanvas({
       document.removeEventListener("mousemove", handleDocumentMove);
       document.removeEventListener("mouseup", handleDocumentUp);
     };
-  }, [loadedImages, positions, canvasRef, setPositions]);
+  }, [loadedImages, canvasRef, setPositions]);
 
-  return <canvas ref={canvasRef} width={600} height={600} style={{ border: "1px solid #555" }} />;
+  return (
+    <canvas
+      ref={canvasRef}
+      width={width}
+      height={height}
+      style={{ border: "1px solid #555" }}
+    />
+  );
 }
