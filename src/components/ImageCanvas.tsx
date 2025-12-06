@@ -10,11 +10,26 @@ interface ImageCanvasProps {
   treeSrc?: string;
   width?: number;
   height?: number;
+  // PROPS for image item size and fit
+  itemWidth?: number;
+  itemHeight?: number;
+  itemFit?: 'cover' | 'contain'; // NEW PROP
 }
 
-const IMAGE_SIZE = 150;
+const DEFAULT_ITEM_WIDTH = 200;
+const DEFAULT_ASPECT_RATIO = 3 / 4;
 const DEFAULT_WIDTH = 1080;
 const DEFAULT_HEIGHT = 1350;
+
+// Helper to calculate the final image size
+const getItemSize = (
+  itemWidth: number = DEFAULT_ITEM_WIDTH,
+  itemHeight?: number
+) => {
+  const w = itemWidth;
+  const h = itemHeight ?? itemWidth / DEFAULT_ASPECT_RATIO;
+  return { w, h };
+};
 
 export default function ImageCanvas({
   canvasRef,
@@ -25,6 +40,10 @@ export default function ImageCanvas({
   treeSrc,
   width = DEFAULT_WIDTH,
   height = DEFAULT_HEIGHT,
+  // Destructure new props
+  itemWidth,
+  itemHeight,
+  itemFit = 'contain', // Default to 'cover'
 }: ImageCanvasProps) {
   const [loadedImages, setLoadedImages] = useState<HTMLImageElement[]>([]);
   const [bgLoaded, setBgLoaded] = useState(false);
@@ -36,6 +55,10 @@ export default function ImageCanvas({
   const bgImage = useRef<HTMLImageElement | null>(null);
   const treeImage = useRef<HTMLImageElement | null>(null);
   const currentPositions = useRef<{ x: number; y: number }[]>([]);
+
+  // Calculate the current item size based on props
+  const { w: currentItemWidth, h: currentItemHeight } = getItemSize(itemWidth, itemHeight);
+
 
   // Set canvas size
   useEffect(() => {
@@ -86,7 +109,7 @@ export default function ImageCanvas({
     currentPositions.current = positions;
   }, [positions]);
 
-  // Helper function to draw image with cover (no stretching)
+  // Helper function to draw image with cover (no stretching, crops if needed)
   const drawImageCover = (
     img: HTMLImageElement,
     x: number,
@@ -103,14 +126,45 @@ export default function ImageCanvas({
     let sourceY = 0;
 
     if (imgAspect > containerAspect) {
+      // Image is wider than container, crop horizontally
       sourceWidth = img.height * containerAspect;
       sourceX = (img.width - sourceWidth) / 2;
     } else {
+      // Image is taller than container, crop vertically
       sourceHeight = img.width / containerAspect;
       sourceY = (img.height - sourceHeight) / 2;
     }
 
     ctx.drawImage(img, sourceX, sourceY, sourceWidth, sourceHeight, x, y, w, h);
+  };
+  
+  // NEW Helper function to draw image with contain (shows entire image, adds empty space if needed)
+  const drawImageContain = (
+    img: HTMLImageElement,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    ctx: CanvasRenderingContext2D
+  ) => {
+    const imgAspect = img.width / img.height;
+    const containerAspect = w / h;
+    let targetX = x;
+    let targetY = y;
+    let targetW = w;
+    let targetH = h;
+
+    if (imgAspect > containerAspect) {
+      // Image is wider than container, fit by width
+      targetH = w / imgAspect;
+      targetY = y + (h - targetH) / 2; // Center vertically
+    } else {
+      // Image is taller than container, fit by height
+      targetW = h * imgAspect;
+      targetX = x + (w - targetW) / 2; // Center horizontally
+    }
+
+    ctx.drawImage(img, 0, 0, img.width, img.height, targetX, targetY, targetW, targetH);
   };
 
   // Calculate padding for tree
@@ -153,7 +207,14 @@ export default function ImageCanvas({
         if (i === hoveredIndex || i === dragIndex) {
           ctx.globalAlpha = 0.85;
         }
-        ctx.drawImage(img, pos.x, pos.y, IMAGE_SIZE, IMAGE_SIZE);
+
+        // --- NEW DRAWING LOGIC: Use cover or contain based on itemFit prop ---
+        if (itemFit === 'cover') {
+            drawImageCover(img, pos.x, pos.y, currentItemWidth, currentItemHeight, ctx);
+        } else { // 'contain'
+            drawImageContain(img, pos.x, pos.y, currentItemWidth, currentItemHeight, ctx);
+        }
+        
         ctx.globalAlpha = 1.0;
 
         if (i === hoveredIndex || i === dragIndex) {
@@ -166,8 +227,8 @@ export default function ImageCanvas({
           ctx.strokeRect(
             pos.x - 2,
             pos.y - 2,
-            IMAGE_SIZE + 4,
-            IMAGE_SIZE + 4
+            currentItemWidth + 4, // Use dynamic size
+            currentItemHeight + 4 // Use dynamic size
           );
           ctx.shadowColor = "transparent";
         }
@@ -183,6 +244,9 @@ export default function ImageCanvas({
     height,
     hoveredIndex,
     dragIndex,
+    currentItemWidth,
+    currentItemHeight,
+    itemFit, // Dependency added
   ]);
 
   // Drag logic
@@ -205,7 +269,6 @@ export default function ImageCanvas({
       }
 
       // Convert mouse position from screen coordinates to canvas drawing coordinates
-      // This is crucial if the canvas is scaled on the page.
       const scaleX = canvas.width / rect.width;
       const scaleY = canvas.height / rect.height;
 
@@ -221,12 +284,12 @@ export default function ImageCanvas({
         const imgPos = currentPositions.current[i];
         if (!imgPos) continue;
 
-        // Hit detection area is exactly the image drawn area
+        // Hit detection area now uses the dynamic item size
         if (
           pos.x >= imgPos.x &&
-          pos.x <= imgPos.x + IMAGE_SIZE &&
+          pos.x <= imgPos.x + currentItemWidth &&
           pos.y >= imgPos.y &&
-          pos.y <= imgPos.y + IMAGE_SIZE
+          pos.y <= imgPos.y + currentItemHeight
         ) {
           return i;
         }
@@ -330,7 +393,7 @@ export default function ImageCanvas({
       document.removeEventListener("mousemove", handleDocumentMove);
       document.removeEventListener("mouseup", handleDocumentUp);
     };
-  }, [loadedImages, canvasRef, setPositions]);
+  }, [loadedImages, canvasRef, setPositions, currentItemWidth, currentItemHeight]);
 
   return (
     <canvas
