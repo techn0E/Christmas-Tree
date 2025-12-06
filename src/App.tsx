@@ -1,4 +1,4 @@
-"@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react";
 import VideoGenerator from "./components/VideoGenerator";
 import Navbar from "./components/Navbar";
 import Snowfall from "./components/Snowfall";
@@ -12,6 +12,9 @@ function App() {
       <main className="app-main">
         <VideoGenerator />
       </main>
+
+
+      <Analytics />
     </div>
   );
 }
