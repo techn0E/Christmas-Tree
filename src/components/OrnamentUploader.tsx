@@ -72,26 +72,28 @@ export default function OrnamentUploader({ images, setImages }: OrnamentUploader
       </div>
 
       <div className="ornament-content">
-        <label 
+        <div 
           className={`upload-box ${dragActive ? 'active' : ''}`}
           onDragEnter={handleDrag}
           onDragLeave={handleDrag}
           onDragOver={handleDrag}
           onDrop={handleDrop}
         >
-          <input
-            type="file"
-            multiple
-            accept="image/*"
-            onChange={handleFileChange}
-            className="file-input"
-            disabled={images.length >= MAX_IMAGES}
-          />
-          <div className="upload-placeholder">
-            <span className="upload-icon">+</span>
-            <span className="upload-text">Click or drag images</span>
-          </div>
-        </label>
+          <label className="upload-label">
+            <input
+              type="file"
+              multiple
+              accept="image/*"
+              onChange={handleFileChange}
+              className="file-input"
+              disabled={images.length >= MAX_IMAGES}
+            />
+            <div className="upload-placeholder">
+              <span className="upload-icon">+</span>
+              <span className="upload-text">Click or drag images</span>
+            </div>
+          </label>
+        </div>
 
         {images.length > 0 && (
           <div className="gallery">
