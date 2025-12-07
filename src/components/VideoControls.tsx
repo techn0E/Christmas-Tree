@@ -11,6 +11,7 @@ interface Props {
   onCustomAudioChange?: (file: File | null) => void;
   generateVideo: () => void;
   loadingFFmpeg: boolean;
+  progress: number;
 }
 
 function VideoControls({
@@ -21,6 +22,7 @@ function VideoControls({
   onCustomAudioChange,
   generateVideo,
   loadingFFmpeg,
+  progress,
 }: Props) {
   return (
     <div className="video-controls">
@@ -50,6 +52,12 @@ function VideoControls({
           {loadingFFmpeg ? "🎬 Processing..." : "🎥 Generate MP4"}
         </button>
       </div>
+
+      {loadingFFmpeg && (
+        <div className="ffmpeg-progress-container">
+          <div className="ffmpeg-progress-bar" style={{ width: `${progress}%` }} />
+        </div>
+      )}
     </div>
   );
 }

@@ -11,7 +11,7 @@ import { DEFAULT_BACKGROUNDS, DEFAULT_TREES, DEFAULT_SOUNDS } from "../types/def
 import "../styles/VideoGenerator.css";
 
 export default function VideoGenerator() {
-  const { images, setImages, positions, setPositions, setAudio, generateVideo, loadingFFmpeg, canvasRef } =
+  const { images, setImages, positions, setPositions, setAudio, generateVideo, loadingFFmpeg, canvasRef, progress } =
     useChristmasTreeVideo();
 
   const [selectedBackground, setSelectedBackground] = useState<Background>(DEFAULT_BACKGROUNDS[0]);
@@ -65,6 +65,7 @@ export default function VideoGenerator() {
             onCustomAudioChange={setAudio}
             generateVideo={generateVideo} 
             loadingFFmpeg={loadingFFmpeg} 
+            progress={progress}
           />
         </div>
       </div>

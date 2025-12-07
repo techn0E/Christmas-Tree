@@ -9,11 +9,13 @@ export function useChristmasTreeVideo() {
   const [positions, setPositions] = useState<{ x: number; y: number }[]>([]);
   const [audio, setAudio] = useState<File | null>(null);
   const [loadingFFmpeg, setLoadingFFmpeg] = useState(false);
+  const [progress, setProgress] = useState(0);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Initialize positions when images change
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPositions((prev) => {
       // If we have the same number of positions as images, keep existing positions
       if (prev.length === images.length) return prev;
@@ -58,6 +60,19 @@ export function useChristmasTreeVideo() {
     const audioUrl = URL.createObjectURL(selectedAudio);
 
     setLoadingFFmpeg(true);
+
+    ffmpeg.setLogger((log: { type: string; message: string }) => {
+      const { type, message } = log;
+      if (type === "fferr" || type === "ffout") {
+        const timeMatch = message.match(/time=(\d+:\d+:\d+\.\d+)/);
+        if (timeMatch) {
+          const [h, m, s] = timeMatch[1].split(":").map(Number);
+          const currentSeconds = h * 3600 + m * 60 + s;
+          setProgress(Math.min((currentSeconds / duration) * 100, 100));
+        }
+      }
+    });
+
     if (!ffmpeg.isLoaded()) await ffmpeg.load();
 
     // convert canvas to file
@@ -92,6 +107,9 @@ export function useChristmasTreeVideo() {
     const data = ffmpeg.FS("readFile", "output.mp4");
     const blob = new Blob([data.buffer], { type: "video/mp4" });
 
+    setProgress(100);
+    setTimeout(() => setProgress(0), 800);
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -113,5 +131,6 @@ export function useChristmasTreeVideo() {
     generateVideo,
     loadingFFmpeg,
     canvasRef,
+    progress,
   };
 }
